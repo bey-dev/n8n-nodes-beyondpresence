@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-base.BeyondPresence",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Marketing & Content", "Sales", "Analytics", "Communication"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://docs.bey.dev/api-key"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.bey.dev/"
+			}
+		]
+	}
+}
