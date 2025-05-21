@@ -1,4 +1,9 @@
-import { IAuthenticateGeneric, ICredentialType, INodeProperties } from 'n8n-workflow';
+import {
+	IAuthenticateGeneric,
+	ICredentialTestRequest,
+	ICredentialType,
+	INodeProperties,
+} from 'n8n-workflow';
 
 export class BeyondPresenceApi implements ICredentialType {
 	name = 'beyondPresenceApi';
@@ -19,6 +24,12 @@ export class BeyondPresenceApi implements ICredentialType {
 			headers: {
 				'x-api-key': '={{$credentials.apiKey}}',
 			},
+		},
+	};
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL: 'https://api.bey.dev/v1',
+			url: 'auth/verify',
 		},
 	};
 }
