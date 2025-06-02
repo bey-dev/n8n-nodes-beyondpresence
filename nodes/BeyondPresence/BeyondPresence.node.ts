@@ -67,16 +67,36 @@ export class BeyondPresence implements INodeType {
 								},
 							};
 							
-							// Make API request
-							responseData = await this.helpers.requestWithAuthentication.call(
-								this,
-								'beyondPresenceApi',
-								requestOptions,
-							);
+							// Get API key from credentials
+							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Return raw response with minimal processing
+							// Make direct API request with API key header
+							requestOptions = {
+								...requestOptions,
+								headers: {
+									...requestOptions.headers,
+									'x-api-key': credentials.apiKey as string,
+								},
+								json: true,
+							};
+							
+							// Make API request directly
+							responseData = await this.helpers.request(requestOptions);
+							
+							// Process and format the JSON response
+							let formattedResponse = responseData;
+							
+							// Ensure proper JSON formatting
+							if (typeof formattedResponse === 'string') {
+								try {
+									formattedResponse = JSON.parse(formattedResponse);
+								} catch (e) {
+									// If it's not valid JSON, leave as is
+								}
+							}
+							
 							returnItems.push({
-								json: responseData,
+								json: formattedResponse,
 								pairedItem: { item: i },
 							});
 						}
@@ -93,16 +113,36 @@ export class BeyondPresence implements INodeType {
 								},
 							};
 							
-							// Make API request
-							responseData = await this.helpers.requestWithAuthentication.call(
-								this,
-								'beyondPresenceApi',
-								requestOptions,
-							);
+							// Get API key from credentials
+							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Return raw API response data
+							// Make direct API request with API key header
+							requestOptions = {
+								...requestOptions,
+								headers: {
+									...requestOptions.headers,
+									'x-api-key': credentials.apiKey as string,
+								},
+								json: true,
+							};
+							
+							// Make API request directly
+							responseData = await this.helpers.request(requestOptions);
+							
+							// Process and format the JSON response
+							let formattedResponse = responseData;
+							
+							// Ensure proper JSON formatting
+							if (typeof formattedResponse === 'string') {
+								try {
+									formattedResponse = JSON.parse(formattedResponse);
+								} catch (e) {
+									// If it's not valid JSON, leave as is
+								}
+							}
+							
 							returnItems.push({
-								json: responseData,
+								json: formattedResponse,
 								pairedItem: { item: i },
 							});
 						}
