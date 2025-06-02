@@ -27,27 +27,20 @@ import { BaseWebhookData, CallEndedEvent, MessageEvent } from './BeyondPresenceT
  *    - Normalizes data formats for consistent downstream processing
  */
 export class BeyondPresence implements INodeType {
-	/**
-	 * Process input data and execute node operations
-	 */
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const returnItems: INodeExecutionData[] = [];
 		const resource = this.getNodeParameter('resource', 0) as string;
 		
-		// Handle API requests for agent and avatar resources, returning raw API output
 		if (resource !== 'webhook') {
 			const operation = this.getNodeParameter('operation', 0) as string;
 			
-			// For each input item, make appropriate API request
 			for (let i = 0; i < items.length; i++) {
 				try {
 					let responseData;
 					
-					// Handle different resources and operations
 					if (resource === 'agent') {
 						if (operation === 'create') {
-							// Create agent API call with required parameters
 							const requestBody = {
 								avatar_id: this.getNodeParameter('avatarId', i),
 								system_prompt: this.getNodeParameter('systemPrompt', i),
@@ -58,7 +51,6 @@ export class BeyondPresence implements INodeType {
 								capabilities: this.getNodeParameter('capabilities', i),
 							};
 							
-							// Basic request configuration
 							const requestOptions: IDataObject = {
 								method: 'POST' as IHttpRequestMethods,
 								baseURL: 'https://api.bey.dev/v1',
@@ -71,22 +63,17 @@ export class BeyondPresence implements INodeType {
 								json: true,
 							};
 							
-							// Get API key from credentials
 							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Add authentication header
 							requestOptions.headers = {
 								...requestOptions.headers as object,
 								'x-api-key': credentials.apiKey as string,
 							};
 							
-							// Make API request
 							responseData = await this.helpers.request!(requestOptions);
 							
-							// Process and format the JSON response
 							let formattedResponse = responseData;
 							
-							// Ensure proper JSON formatting
 							if (typeof formattedResponse === 'string') {
 								try {
 									formattedResponse = JSON.parse(formattedResponse);
@@ -95,28 +82,17 @@ export class BeyondPresence implements INodeType {
 								}
 							}
 							
-							// Return the complete response and add call_link
-							if (formattedResponse && typeof formattedResponse === 'object') {
-								// Add call_link to the response based on the id
-								if (formattedResponse.id) {
-									formattedResponse.call_link = `https://bey.chat/${formattedResponse.id}`;
-								}
-								
-								returnItems.push({
-									json: formattedResponse,
-									pairedItem: { item: i },
-								});
-							} else {
-								// If response is not an object, return as is
-								returnItems.push({
-									json: formattedResponse,
-									pairedItem: { item: i },
-								});
+							if (formattedResponse && typeof formattedResponse === 'object' && formattedResponse.id) {
+								formattedResponse.call_link = `https://bey.chat/${formattedResponse.id}`;
 							}
+							
+							returnItems.push({
+								json: formattedResponse,
+								pairedItem: { item: i },
+							});
 						}
 					} else if (resource === 'avatar') {
 						if (operation === 'get') {
-							// Get avatars API call
 							const requestOptions: IDataObject = {
 								method: 'GET' as IHttpRequestMethods,
 								baseURL: 'https://api.bey.dev/v1',
@@ -128,22 +104,17 @@ export class BeyondPresence implements INodeType {
 								json: true,
 							};
 							
-							// Get API key from credentials
 							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Add authentication header
 							requestOptions.headers = {
 								...requestOptions.headers as object,
 								'x-api-key': credentials.apiKey as string,
 							};
 							
-							// Make API request
 							responseData = await this.helpers.request!(requestOptions);
 							
-							// Process and format the JSON response
 							let formattedResponse = responseData;
 							
-							// Ensure proper JSON formatting
 							if (typeof formattedResponse === 'string') {
 								try {
 									formattedResponse = JSON.parse(formattedResponse);
@@ -159,7 +130,6 @@ export class BeyondPresence implements INodeType {
 						}
 					}
 				} catch (error) {
-					// If there's an error, include it in the output
 					if (this.continueOnFail()) {
 						returnItems.push({
 							json: {
@@ -193,12 +163,10 @@ export class BeyondPresence implements INodeType {
 						agentIds = agentIdsString.split(',').map(id => id.trim());
 					}
 					
-					// Get webhook data from input
 					const webhookDataRaw = this.getNodeParameter('webhookData', i) as string | object;
 					let webhookData: BaseWebhookData;
 					
 					try {
-						// Parse webhook data if it's a string
 						if (typeof webhookDataRaw === 'string') {
 							webhookData = JSON.parse(webhookDataRaw) as BaseWebhookData;
 						} else {
@@ -208,12 +176,11 @@ export class BeyondPresence implements INodeType {
 						throw new ApplicationError(`Invalid webhook data: ${(error as Error).message}`);
 					}
 					
-					// Check if we should process this event based on type
 					if (eventType !== 'all' && webhookData.event_type !== eventType) {
 						continue;
 					}
 					
-					// Extract agent ID from all possible locations in the data
+					// Helper to extract agent ID from various possible locations
 					const getAgentId = (data: BaseWebhookData): string => {
 						if (data.agent_id) return data.agent_id;
 						if (data.agentId) return data.agentId;
@@ -222,7 +189,6 @@ export class BeyondPresence implements INodeType {
 						return '';
 					};
 					
-					// Check if we should process this event based on agent ID
 					if (filterByAgentIds && agentIds.length > 0) {
 						const eventAgentId = getAgentId(webhookData);
 						if (!eventAgentId || !agentIds.includes(eventAgentId)) {
@@ -230,18 +196,13 @@ export class BeyondPresence implements INodeType {
 						}
 					}
 					
-					// Process based on event type
 					if (webhookData.event_type === 'call_ended') {
-						// Safe cast to CallEndedEvent
 						const callEndedEvent = webhookData as CallEndedEvent;
 						
-						// Process call ended event with safe null checks
 						const processedData = {
-							// Call details
 							call_id: callEndedEvent.call_id || '',
 							agent_id: getAgentId(callEndedEvent),
 							
-							// Call details - with safe null handling
 							call_details: {
 								duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
 									? parseInt(callEndedEvent.evaluation.duration_minutes) 
@@ -253,14 +214,12 @@ export class BeyondPresence implements INodeType {
 								user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
 							},
 							
-							// User info
 							user: {
 								name: callEndedEvent.user_name || 
 									(callEndedEvent.call_data && callEndedEvent.call_data.userName) || 
 									'Unknown',
 							},
 							
-							// Call summary with first and last messages
 							call_summary: {
 								duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
 									? parseInt(callEndedEvent.evaluation.duration_minutes) 
@@ -277,14 +236,12 @@ export class BeyondPresence implements INodeType {
 								user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
 							},
 							
-							// Processed messages with consistent format
 							messages: (callEndedEvent.messages || []).map(msg => ({
 								sender: msg.sender || '',
 								message: msg.message || '',
 								timestamp: msg.sent_at || '',
 							})),
 							
-							// Event type
 							event_type: 'call_ended',
 						};
 						
@@ -293,33 +250,26 @@ export class BeyondPresence implements INodeType {
 							pairedItem: { item: i },
 						});
 					} else if (webhookData.event_type === 'message') {
-						// Safe cast to MessageEvent
 						const messageEvent = webhookData as MessageEvent;
 						
-						// Process message event with null checks
 						const processedData = {
-							// Call and agent details
 							call_id: messageEvent.call_id || '',
 							agent_id: getAgentId(messageEvent),
 							
-							// User info
 							user: {
 								name: messageEvent.call_data?.userName || 'Unknown',
 							},
 							
-							// Message details - with safe null handling
 							message: {
 								sender: messageEvent.message?.sender || '',
 								content: messageEvent.message?.message || '',
 								timestamp: messageEvent.message?.sent_at || '',
 							},
 							
-							// Call timing info
 							call_timing: {
 								started_at: messageEvent.call_data?.startedAt || '',
 							},
 							
-							// Event type
 							event_type: 'message',
 						};
 						
@@ -328,7 +278,7 @@ export class BeyondPresence implements INodeType {
 							pairedItem: { item: i },
 						});
 					} else {
-						// For unknown event types, just pass the data through with minimal processing
+						// For unknown event types, pass minimal data
 						returnItems.push({
 							json: {
 								event_type: webhookData.event_type || 'unknown',
@@ -339,11 +289,9 @@ export class BeyondPresence implements INodeType {
 						});
 					}
 				} else {
-					// For other operations, just pass through
 					returnItems.push(items[i]);
 				}
 			} catch (error) {
-				// If there's an error, include it in the output
 				if (this.continueOnFail()) {
 					returnItems.push({
 						json: {
@@ -362,9 +310,6 @@ export class BeyondPresence implements INodeType {
 		return this.prepareOutputData(returnItems);
 	}
 	
-	/**
-	 * Node description
-	 */
 	description: INodeTypeDescription = {
 		displayName: 'Beyond Presence',
 		name: 'beyondPresence',
