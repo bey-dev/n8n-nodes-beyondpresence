@@ -1,4 +1,5 @@
 import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
+import { BaseWebhookData, CallEndedEvent, MessageEvent } from './BeyondPresenceTypes';
 
 /**
  * BeyondPresence node for n8n to interact with Beyond Presence API
@@ -10,17 +11,183 @@ export class BeyondPresence implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const returnItems: INodeExecutionData[] = [];
+		const resource = this.getNodeParameter('resource', 0) as string;
 		
+		// Handle normal routing for agent and avatar resources
+		if (resource !== 'webhook') {
+			return this.prepareOutputData(items);
+		}
+		
+		// Process webhook data
 		for (let i = 0; i < items.length; i++) {
 			try {
-				// Just pass through all items to default routing
-				returnItems.push(items[i]);
+				const operation = this.getNodeParameter('operation', i) as string;
+				
+				if (operation === 'handleEvent') {
+					const eventType = this.getNodeParameter('eventType', i) as string;
+					const filterByAgentIds = this.getNodeParameter('filterByAgentIds', i, false) as boolean;
+					let agentIds: string[] = [];
+					
+					if (filterByAgentIds) {
+						const agentIdsString = this.getNodeParameter('agentIds', i, '') as string;
+						agentIds = agentIdsString.split(',').map(id => id.trim());
+					}
+					
+					// Get webhook data from input
+					const webhookDataRaw = this.getNodeParameter('webhookData', i) as string | object;
+					let webhookData: BaseWebhookData;
+					
+					try {
+						// Parse webhook data if it's a string
+						if (typeof webhookDataRaw === 'string') {
+							webhookData = JSON.parse(webhookDataRaw) as BaseWebhookData;
+						} else {
+							webhookData = webhookDataRaw as BaseWebhookData;
+						}
+					} catch (error) {
+						throw new Error(`Invalid webhook data: ${(error as Error).message}`);
+					}
+					
+					// Check if we should process this event based on type
+					if (eventType !== 'all' && webhookData.event_type !== eventType) {
+						continue;
+					}
+					
+					// Check if we should process this event based on agent ID
+					if (filterByAgentIds && agentIds.length > 0) {
+						const eventAgentId = webhookData.agent_id || webhookData.agentId;
+						if (!eventAgentId || !agentIds.includes(eventAgentId)) {
+							continue;
+						}
+					}
+					
+					// Extract agent ID from all possible locations in the data
+					const getAgentId = (data: BaseWebhookData): string => {
+						if (data.agent_id) return data.agent_id;
+						if (data.agentId) return data.agentId;
+						if (data.call_data?.agent_id) return data.call_data.agent_id;
+						if (data.call_data?.agentId) return data.call_data.agentId;
+						return '';
+					};
+					
+					// Process based on event type
+					if (webhookData.event_type === 'call_ended') {
+						// Safe cast to CallEndedEvent
+						const callEndedEvent = webhookData as CallEndedEvent;
+						
+						// Process call ended event with safe null checks
+						const processedData = {
+								// Call details
+								call_id: callEndedEvent.call_id || '',
+								agent_id: getAgentId(callEndedEvent),
+								
+								// Call details - with safe null handling
+								call_details: {
+									duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
+										? parseInt(callEndedEvent.evaluation.duration_minutes) 
+										: (callEndedEvent.evaluation?.duration_minutes || 0),
+									message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
+										? parseInt(callEndedEvent.evaluation.messages_count)
+										: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+									topic: callEndedEvent.evaluation?.topic || 'Unknown',
+									user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
+								},
+								
+								// User info
+								user: {
+									name: callEndedEvent.user_name || 
+										(callEndedEvent.call_data && callEndedEvent.call_data.userName) || 
+										'Unknown',
+								},
+								
+								// Call summary with first and last messages
+								call_summary: {
+									duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
+										? parseInt(callEndedEvent.evaluation.duration_minutes) 
+										: (callEndedEvent.evaluation?.duration_minutes || 0),
+									message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
+										? parseInt(callEndedEvent.evaluation.messages_count)
+										: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+									first_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
+										? callEndedEvent.messages[0].message 
+										: '',
+									last_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
+										? callEndedEvent.messages[callEndedEvent.messages.length - 1].message 
+										: '',
+									user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
+								},
+								
+								// Processed messages with consistent format
+								messages: (callEndedEvent.messages || []).map(msg => ({
+									sender: msg.sender || '',
+									message: msg.message || '',
+									timestamp: msg.sent_at || '',
+								})),
+								
+								// Event type
+								event_type: 'call_ended',
+							};
+						
+						returnItems.push({
+							json: processedData,
+							pairedItem: { item: i },
+						});
+					} else if (webhookData.event_type === 'message') {
+						// Safe cast to MessageEvent
+						const messageEvent = webhookData as MessageEvent;
+						
+						// Process message event with null checks
+						const processedData = {
+							// Call and agent details
+							call_id: messageEvent.call_id || '',
+							agent_id: getAgentId(messageEvent),
+							
+							// User info
+							user: {
+								name: messageEvent.call_data?.userName || 'Unknown',
+							},
+							
+							// Message details - with safe null handling
+							message: {
+								sender: messageEvent.message?.sender || '',
+								content: messageEvent.message?.message || '',
+								timestamp: messageEvent.message?.sent_at || '',
+							},
+							
+							// Call timing info
+							call_timing: {
+								started_at: messageEvent.call_data?.startedAt || '',
+							},
+							
+							// Event type
+							event_type: 'message',
+						};
+						
+						returnItems.push({
+							json: processedData,
+							pairedItem: { item: i },
+						});
+					} else {
+						// For unknown event types, just pass the data through with minimal processing
+						returnItems.push({
+							json: {
+								event_type: webhookData.event_type || 'unknown',
+								call_id: webhookData.call_id || '',
+								agent_id: getAgentId(webhookData),
+							},
+							pairedItem: { item: i },
+						});
+					}
+				} else {
+					// For other operations, just pass through
+					returnItems.push(items[i]);
+				}
 			} catch (error) {
 				// If there's an error, include it in the output
 				if (this.continueOnFail()) {
 					returnItems.push({
 						json: {
-							error: error.message,
+							error: (error as Error).message,
 						},
 						pairedItem: {
 							item: i,
