@@ -5,7 +5,8 @@ import {
 	INodeExecutionData, 
 	INodeType, 
 	INodeTypeDescription, 
-	NodeConnectionType 
+	NodeConnectionType,
+	IDataObject
 } from 'n8n-workflow';
 import { BaseWebhookData, CallEndedEvent, MessageEvent } from './BeyondPresenceTypes';
 
@@ -41,14 +42,24 @@ export class BeyondPresence implements INodeType {
 			// For each input item, make appropriate API request
 			for (let i = 0; i < items.length; i++) {
 				try {
-					let requestOptions;
 					let responseData;
 					
 					// Handle different resources and operations
 					if (resource === 'agent') {
 						if (operation === 'create') {
-							// Create agent API call
-							requestOptions = {
+							// Create agent API call with required parameters
+							const requestBody = {
+								avatar_id: this.getNodeParameter('avatarId', i),
+								system_prompt: this.getNodeParameter('systemPrompt', i),
+								name: this.getNodeParameter('name', i),
+								language: this.getNodeParameter('language', i),
+								greeting: this.getNodeParameter('greeting', i),
+								max_session_length_minutes: this.getNodeParameter('maxSessionLengthMinutes', i),
+								capabilities: this.getNodeParameter('capabilities', i),
+							};
+							
+							// Basic request configuration
+							const requestOptions: IDataObject = {
 								method: 'POST' as IHttpRequestMethods,
 								baseURL: 'https://api.bey.dev/v1',
 								url: '/agent',
@@ -56,32 +67,21 @@ export class BeyondPresence implements INodeType {
 									'Accept': 'application/json',
 									'Content-Type': 'application/json',
 								},
-								body: {
-									avatar_id: this.getNodeParameter('avatarId', i),
-									system_prompt: this.getNodeParameter('systemPrompt', i),
-									name: this.getNodeParameter('name', i),
-									language: this.getNodeParameter('language', i),
-									greeting: this.getNodeParameter('greeting', i),
-									max_session_length_minutes: this.getNodeParameter('maxSessionLengthMinutes', i),
-									capabilities: this.getNodeParameter('capabilities', i),
-								},
+								body: requestBody,
+								json: true,
 							};
 							
 							// Get API key from credentials
 							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Make direct API request with API key header
-							requestOptions = {
-								...requestOptions,
-								headers: {
-									...requestOptions.headers,
-									'x-api-key': credentials.apiKey as string,
-								},
-								json: true,
+							// Add authentication header
+							requestOptions.headers = {
+								...requestOptions.headers as object,
+								'x-api-key': credentials.apiKey as string,
 							};
 							
-							// Make API request directly
-							responseData = await this.helpers.request(requestOptions);
+							// Make API request
+							responseData = await this.helpers.request!(requestOptions);
 							
 							// Process and format the JSON response
 							let formattedResponse = responseData;
@@ -95,15 +95,29 @@ export class BeyondPresence implements INodeType {
 								}
 							}
 							
-							returnItems.push({
-								json: formattedResponse,
-								pairedItem: { item: i },
-							});
+							// Return the complete response and add call_link
+							if (formattedResponse && typeof formattedResponse === 'object') {
+								// Add call_link to the response based on the id
+								if (formattedResponse.id) {
+									formattedResponse.call_link = `https://bey.chat/${formattedResponse.id}`;
+								}
+								
+								returnItems.push({
+									json: formattedResponse,
+									pairedItem: { item: i },
+								});
+							} else {
+								// If response is not an object, return as is
+								returnItems.push({
+									json: formattedResponse,
+									pairedItem: { item: i },
+								});
+							}
 						}
 					} else if (resource === 'avatar') {
 						if (operation === 'get') {
 							// Get avatars API call
-							requestOptions = {
+							const requestOptions: IDataObject = {
 								method: 'GET' as IHttpRequestMethods,
 								baseURL: 'https://api.bey.dev/v1',
 								url: '/avatar',
@@ -111,23 +125,20 @@ export class BeyondPresence implements INodeType {
 									'Accept': 'application/json',
 									'Content-Type': 'application/json',
 								},
+								json: true,
 							};
 							
 							// Get API key from credentials
 							const credentials = await this.getCredentials('beyondPresenceApi');
 							
-							// Make direct API request with API key header
-							requestOptions = {
-								...requestOptions,
-								headers: {
-									...requestOptions.headers,
-									'x-api-key': credentials.apiKey as string,
-								},
-								json: true,
+							// Add authentication header
+							requestOptions.headers = {
+								...requestOptions.headers as object,
+								'x-api-key': credentials.apiKey as string,
 							};
 							
-							// Make API request directly
-							responseData = await this.helpers.request(requestOptions);
+							// Make API request
+							responseData = await this.helpers.request!(requestOptions);
 							
 							// Process and format the JSON response
 							let formattedResponse = responseData;
