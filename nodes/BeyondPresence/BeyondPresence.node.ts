@@ -180,13 +180,9 @@ export class BeyondPresence implements INodeType {
 						continue;
 					}
 					
-					// Helper to extract agent ID from various possible locations
+					// Get agent ID directly from call_data
 					const getAgentId = (data: BaseWebhookData): string => {
-						if (data.agent_id) return data.agent_id;
-						if (data.agentId) return data.agentId;
-						if (data.call_data?.agent_id) return data.call_data.agent_id;
-						if (data.call_data?.agentId) return data.call_data.agentId;
-						return '';
+						return data.call_data?.agentId || '';
 					};
 					
 					if (filterByAgentIds && agentIds.length > 0) {
