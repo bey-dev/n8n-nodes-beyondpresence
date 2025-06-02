@@ -15,8 +15,8 @@ export interface WebhookMessage {
  * Call data containing user and agent information
  */
 export interface CallData {
-  userName?: string;
-  agentId?: string;
+  userName?: string; 
+  agentId?: string; 
   startedAt?: string;
   endedAt?: string;
   leftAt?: string;
@@ -28,11 +28,7 @@ export interface CallData {
 export interface MessageEvent {
   event_type: "message";
   call_id: string;
-  message: {
-    sender: string;
-    message: string;
-    sent_at: string;
-  };
+  message: WebhookMessage;
   call_data: CallData;
 }
 

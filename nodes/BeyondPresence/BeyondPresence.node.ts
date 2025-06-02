@@ -11,13 +11,49 @@ import {
 	IHookFunctions,
 	JsonObject
 } from 'n8n-workflow';
-import { BaseWebhookData, CallEndedEvent, MessageEvent } from './BeyondPresenceTypes';
+import { BaseWebhookData, CallEndedEvent, MessageEvent, WebhookMessage } from './BeyondPresenceTypes';
 
 const beyondPresenceHelpers = {
+	/**
+	 * Extracts the agent ID from different possible locations in the webhook data
+	 * @param {BaseWebhookData} data - The webhook data to extract the agent ID from
+	 * @returns {string} The agent ID or an empty string if not found
+	 */
 	getAgentId(data: BaseWebhookData): string {
-		return data.call_data?.agentId || data.agent_id || data.agentId || '';
+		return data.call_data?.agentId || data.agentId || '';
+	},
+	
+	/**
+	 * Parses and normalizes duration minutes from the webhook data
+	 * @param {string | number | undefined} duration - The duration value to parse
+	 * @returns {number} The normalized duration in minutes as a number
+	 */
+	parseDurationMinutes(duration: string | number | undefined): number {
+		if (typeof duration === 'string') {
+			return parseInt(duration);
+		}
+		return duration || 0;
+	},
+	
+	/**
+	 * Parses and normalizes message count from the webhook data
+	 * @param {string | number | undefined} count - The message count value to parse
+	 * @param {WebhookMessage[] | undefined} messages - The messages array to use as fallback for count
+	 * @returns {number} The normalized message count as a number
+	 */
+	parseMessageCount(count: string | number | undefined, messages: WebhookMessage[] | undefined): number {
+		if (typeof count === 'string') {
+			return parseInt(count);
+		}
+		return count || (messages?.length || 0);
 	},
 
+	/**
+	 * Parses and validates webhook data from raw input
+	 * @param {string | object} webhookDataRaw - The raw webhook data to parse
+	 * @returns {BaseWebhookData} The parsed webhook data
+	 * @throws {ApplicationError} If the webhook data is invalid
+	 */
 	parseWebhookData(webhookDataRaw: string | object): BaseWebhookData {
 		let webhookData: BaseWebhookData;
 		
@@ -42,18 +78,22 @@ const beyondPresenceHelpers = {
 		}
 	},
 
+	/**
+	 * Processes a 'call_ended' event and converts it to a structured format
+	 * @param {CallEndedEvent} callEndedEvent - The call ended event to process
+	 * @returns {IDataObject} Structured data with call details, user info, messages, and summary
+	 */
 	processCallEndedEvent(callEndedEvent: CallEndedEvent): IDataObject {
+		const durationMinutes = this.parseDurationMinutes(callEndedEvent.evaluation?.duration_minutes);
+		const messageCount = this.parseMessageCount(callEndedEvent.evaluation?.messages_count, callEndedEvent.messages);
+		
 		return {
 			call_id: callEndedEvent.call_id || '',
 			agent_id: this.getAgentId(callEndedEvent),
 			
 			call_details: {
-				duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
-					? parseInt(callEndedEvent.evaluation.duration_minutes) 
-					: (callEndedEvent.evaluation?.duration_minutes || 0),
-				message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
-					? parseInt(callEndedEvent.evaluation.messages_count)
-					: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+				duration_minutes: durationMinutes,
+				message_count: messageCount,
 				topic: callEndedEvent.evaluation?.topic || 'Unknown',
 				user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
 			},
@@ -65,12 +105,8 @@ const beyondPresenceHelpers = {
 			},
 			
 			call_summary: {
-				duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
-					? parseInt(callEndedEvent.evaluation.duration_minutes) 
-					: (callEndedEvent.evaluation?.duration_minutes || 0),
-				message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
-					? parseInt(callEndedEvent.evaluation.messages_count)
-					: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+				duration_minutes: durationMinutes,
+				message_count: messageCount,
 				first_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
 					? callEndedEvent.messages[0].message 
 					: '',
@@ -90,6 +126,11 @@ const beyondPresenceHelpers = {
 		};
 	},
 
+	/**
+	 * Processes a 'message' event and converts it to a structured format
+	 * @param {MessageEvent} messageEvent - The message event to process
+	 * @returns {IDataObject} Structured data with message details and call context
+	 */
 	processMessageEvent(messageEvent: MessageEvent): IDataObject {
 		return {
 			call_id: messageEvent.call_id || '',
@@ -109,6 +150,11 @@ const beyondPresenceHelpers = {
 		};
 	},
 
+	/**
+	 * Formats API response data for consistent output
+	 * @param {unknown} responseData - The raw response data to format
+	 * @returns {JsonObject} Formatted response with additional helpful properties like call_link
+	 */
 	formatResponse(responseData: unknown): JsonObject {
 		let formattedResponse: unknown = responseData;
 		
@@ -152,8 +198,8 @@ export class BeyondPresence implements INodeType {
 	};
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-		const req = this.getRequestObject();
-		const bodyData = req.body;
+		const request = this.getRequestObject();
+		const webhookPayload = request.body;
 		const returnData: INodeExecutionData[] = [];
 		
 		const webhookResponse = {
@@ -165,11 +211,11 @@ export class BeyondPresence implements INodeType {
 		};
 		
 		try {
-			if (!bodyData) {
+			if (!webhookPayload) {
 				throw new ApplicationError('Missing webhook data');
 			}
 			
-			const webhookData = beyondPresenceHelpers.parseWebhookData(bodyData);
+			const webhookData = beyondPresenceHelpers.parseWebhookData(webhookPayload);
 			
 			if (webhookData.event_type === 'call_ended') {
 				const processedData = beyondPresenceHelpers.processCallEndedEvent(webhookData as CallEndedEvent);
@@ -316,10 +362,10 @@ export class BeyondPresence implements INodeType {
 						continue;
 					}
 					
-					const eventAgentId = beyondPresenceHelpers.getAgentId(webhookData);
+					const extractedAgentId = beyondPresenceHelpers.getAgentId(webhookData);
 					
 					if (filterByAgentIds && agentIds.length > 0) {
-						if (!eventAgentId || !agentIds.includes(eventAgentId)) {
+						if (!extractedAgentId || !agentIds.includes(extractedAgentId)) {
 							continue;
 						}
 					}
@@ -334,7 +380,7 @@ export class BeyondPresence implements INodeType {
 						processedData = {
 							event_type: webhookData.event_type || 'unknown',
 							call_id: webhookData.call_id || '',
-							agent_id: eventAgentId,
+							agent_id: extractedAgentId,
 						};
 					}
 					
