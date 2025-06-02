@@ -17,7 +17,6 @@ export interface WebhookMessage {
 export interface CallData {
   userName?: string;
   agentId?: string;
-  agent_id?: string;
   startedAt?: string;
   endedAt?: string;
   leftAt?: string;
@@ -51,7 +50,6 @@ export interface CallEndedEvent {
   };
   messages: WebhookMessage[];
   user_name?: string;
-  agent_id?: string;
   agentId?: string;
   call_data?: CallData;
   sentiment_disclaimer?: string;
@@ -62,7 +60,6 @@ export interface CallEndedEvent {
  */
 export interface BaseWebhookData {
   event_type?: string;
-  agent_id?: string;
   agentId?: string;
   call_id?: string;
   call_data?: CallData;
