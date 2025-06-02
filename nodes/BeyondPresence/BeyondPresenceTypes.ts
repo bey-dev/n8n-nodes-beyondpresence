@@ -66,7 +66,17 @@ export interface BaseWebhookData {
   agentId?: string;
   call_id?: string;
   call_data?: CallData;
-  [key: string]: any; // Allow for additional properties
+  evaluation?: {
+    topic?: string;
+    user_sentiment?: string;
+    duration_minutes?: number | string;
+    messages_count?: number | string;
+    [key: string]: unknown;
+  };
+  message?: WebhookMessage | Record<string, unknown>;
+  messages?: WebhookMessage[];
+  user_name?: string;
+  sentiment_disclaimer?: string;
 }
 
 /**
