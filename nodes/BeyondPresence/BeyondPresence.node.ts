@@ -53,14 +53,6 @@ export class BeyondPresence implements INodeType {
 						continue;
 					}
 					
-					// Check if we should process this event based on agent ID
-					if (filterByAgentIds && agentIds.length > 0) {
-						const eventAgentId = webhookData.agent_id || webhookData.agentId;
-						if (!eventAgentId || !agentIds.includes(eventAgentId)) {
-							continue;
-						}
-					}
-					
 					// Extract agent ID from all possible locations in the data
 					const getAgentId = (data: BaseWebhookData): string => {
 						if (data.agent_id) return data.agent_id;
@@ -70,6 +62,14 @@ export class BeyondPresence implements INodeType {
 						return '';
 					};
 					
+					// Check if we should process this event based on agent ID
+					if (filterByAgentIds && agentIds.length > 0) {
+						const eventAgentId = getAgentId(webhookData);
+						if (!eventAgentId || !agentIds.includes(eventAgentId)) {
+							continue;
+						}
+					}
+					
 					// Process based on event type
 					if (webhookData.event_type === 'call_ended') {
 						// Safe cast to CallEndedEvent
@@ -77,56 +77,56 @@ export class BeyondPresence implements INodeType {
 						
 						// Process call ended event with safe null checks
 						const processedData = {
-								// Call details
-								call_id: callEndedEvent.call_id || '',
-								agent_id: getAgentId(callEndedEvent),
-								
-								// Call details - with safe null handling
-								call_details: {
-									duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
-										? parseInt(callEndedEvent.evaluation.duration_minutes) 
-										: (callEndedEvent.evaluation?.duration_minutes || 0),
-									message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
-										? parseInt(callEndedEvent.evaluation.messages_count)
-										: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
-									topic: callEndedEvent.evaluation?.topic || 'Unknown',
-									user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
-								},
-								
-								// User info
-								user: {
-									name: callEndedEvent.user_name || 
-										(callEndedEvent.call_data && callEndedEvent.call_data.userName) || 
-										'Unknown',
-								},
-								
-								// Call summary with first and last messages
-								call_summary: {
-									duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
-										? parseInt(callEndedEvent.evaluation.duration_minutes) 
-										: (callEndedEvent.evaluation?.duration_minutes || 0),
-									message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
-										? parseInt(callEndedEvent.evaluation.messages_count)
-										: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
-									first_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
-										? callEndedEvent.messages[0].message 
-										: '',
-									last_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
-										? callEndedEvent.messages[callEndedEvent.messages.length - 1].message 
-										: '',
-									user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
-								},
-								
-								// Processed messages with consistent format
-								messages: (callEndedEvent.messages || []).map(msg => ({
-									sender: msg.sender || '',
-									message: msg.message || '',
-									timestamp: msg.sent_at || '',
-								})),
-								
-								// Event type
-								event_type: 'call_ended',
-							};
+							// Call details
+							call_id: callEndedEvent.call_id || '',
+							agent_id: getAgentId(callEndedEvent),
+							
+							// Call details - with safe null handling
+							call_details: {
+								duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
+									? parseInt(callEndedEvent.evaluation.duration_minutes) 
+									: (callEndedEvent.evaluation?.duration_minutes || 0),
+								message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
+									? parseInt(callEndedEvent.evaluation.messages_count)
+									: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+								topic: callEndedEvent.evaluation?.topic || 'Unknown',
+								user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
+							},
+							
+							// User info
+							user: {
+								name: callEndedEvent.user_name || 
+									(callEndedEvent.call_data && callEndedEvent.call_data.userName) || 
+									'Unknown',
+							},
+							
+							// Call summary with first and last messages
+							call_summary: {
+								duration_minutes: typeof callEndedEvent.evaluation?.duration_minutes === 'string' 
+									? parseInt(callEndedEvent.evaluation.duration_minutes) 
+									: (callEndedEvent.evaluation?.duration_minutes || 0),
+								message_count: typeof callEndedEvent.evaluation?.messages_count === 'string'
+									? parseInt(callEndedEvent.evaluation.messages_count)
+									: (callEndedEvent.evaluation?.messages_count || callEndedEvent.messages?.length || 0),
+								first_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
+									? callEndedEvent.messages[0].message 
+									: '',
+								last_message: callEndedEvent.messages && callEndedEvent.messages.length > 0 
+									? callEndedEvent.messages[callEndedEvent.messages.length - 1].message 
+									: '',
+								user_sentiment: callEndedEvent.evaluation?.user_sentiment || 'Unknown',
+							},
+							
+							// Processed messages with consistent format
+							messages: (callEndedEvent.messages || []).map(msg => ({
+								sender: msg.sender || '',
+								message: msg.message || '',
+								timestamp: msg.sent_at || '',
+							})),
+							
+							// Event type
+							event_type: 'call_ended',
+						};
 						
 						returnItems.push({
 							json: processedData,
