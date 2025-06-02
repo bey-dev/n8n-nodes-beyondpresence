@@ -1,6 +1,43 @@
-import { INodeType, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
+import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
 
+/**
+ * BeyondPresence node for n8n to interact with Beyond Presence API
+ */
 export class BeyondPresence implements INodeType {
+	/**
+	 * Process input data and execute node operations
+	 */
+	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		const items = this.getInputData();
+		const returnItems: INodeExecutionData[] = [];
+		
+		for (let i = 0; i < items.length; i++) {
+			try {
+				// Just pass through all items to default routing
+				returnItems.push(items[i]);
+			} catch (error) {
+				// If there's an error, include it in the output
+				if (this.continueOnFail()) {
+					returnItems.push({
+						json: {
+							error: error.message,
+						},
+						pairedItem: {
+							item: i,
+						},
+					});
+					continue;
+				}
+				throw error;
+			}
+		}
+		
+		return this.prepareOutputData(returnItems);
+	}
+	
+	/**
+	 * Node description
+	 */
 	description: INodeTypeDescription = {
 		displayName: 'Beyond Presence',
 		name: 'beyondPresence',
@@ -41,6 +78,10 @@ export class BeyondPresence implements INodeType {
 					{
 						name: 'Avatar',
 						value: 'avatar',
+					},
+					{
+						name: 'Webhook',
+						value: 'webhook',
 					},
 				],
 				default: 'agent',
@@ -262,6 +303,99 @@ export class BeyondPresence implements INodeType {
 					},
 				],
 				default: 'get',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+					},
+				},
+				options: [
+					{
+						name: 'Handle Event',
+						value: 'handleEvent',
+						action: 'Handle webhook event',
+						description: 'Process Beyond Presence webhook events',
+					},
+				],
+				default: 'handleEvent',
+			},
+			{
+				displayName: 'Event Type',
+				name: 'eventType',
+				type: 'options',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['handleEvent'],
+					},
+				},
+				options: [
+					{
+						name: 'Call Ended',
+						value: 'call_ended',
+						description: 'When a call ends',
+					},
+					{
+						name: 'Message',
+						value: 'message',
+						description: 'When a message is exchanged during a call',
+					},
+					{
+						name: 'All Events',
+						value: 'all',
+						description: 'Process all event types',
+					},
+				],
+				default: 'all',
+				description: 'The event type to process',
+			},
+			{
+				displayName: 'Filter by Agent IDs',
+				name: 'filterByAgentIds',
+				type: 'boolean',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['handleEvent'],
+					},
+				},
+				default: false,
+				description: 'Whether to filter events by agent IDs',
+			},
+			{
+				displayName: 'Agent IDs',
+				name: 'agentIds',
+				type: 'string',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['handleEvent'],
+						filterByAgentIds: [true],
+					},
+				},
+				default: '',
+				placeholder: 'agent_123,agent_456',
+				description: 'Comma-separated list of agent IDs to filter by',
+				hint: 'Enter multiple agent IDs separated by commas',
+			},
+			{
+				displayName: 'Webhook Data',
+				name: 'webhookData',
+				type: 'json',
+				displayOptions: {
+					show: {
+						resource: ['webhook'],
+						operation: ['handleEvent'],
+					},
+				},
+				default: '={{ $json.body || $json }}',
+				description: 'The webhook payload data. Use $JSON.body for n8n webhooks that contain data in the body property.',
+				required: true,
 			},
 		],
 	};
