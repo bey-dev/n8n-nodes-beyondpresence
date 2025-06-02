@@ -1,8 +1,29 @@
-import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription, NodeConnectionType } from 'n8n-workflow';
+import { 
+	ApplicationError, 
+	IExecuteFunctions, 
+	IHttpRequestMethods,
+	INodeExecutionData, 
+	INodeType, 
+	INodeTypeDescription, 
+	NodeConnectionType 
+} from 'n8n-workflow';
 import { BaseWebhookData, CallEndedEvent, MessageEvent } from './BeyondPresenceTypes';
 
 /**
  * BeyondPresence node for n8n to interact with Beyond Presence API
+ * 
+ * This node provides two main ways to interact with the Beyond Presence API:
+ * 
+ * 1. API Routing (agent and avatar resources):
+ *    - Uses programmatic API calls
+ *    - Returns raw JSON responses directly from the API
+ *    - Supports GET and POST methods with proper authentication
+ * 
+ * 2. Webhook Processing (webhook resource):
+ *    - Manually processes webhook payloads received from Beyond Presence
+ *    - Handles different event types like 'call_ended' and 'message'
+ *    - Supports filtering by agent ID
+ *    - Normalizes data formats for consistent downstream processing
  */
 export class BeyondPresence implements INodeType {
 	/**
@@ -13,9 +34,97 @@ export class BeyondPresence implements INodeType {
 		const returnItems: INodeExecutionData[] = [];
 		const resource = this.getNodeParameter('resource', 0) as string;
 		
-		// Handle normal routing for agent and avatar resources
+		// Handle API requests for agent and avatar resources, returning raw API output
 		if (resource !== 'webhook') {
-			return this.prepareOutputData(items);
+			const operation = this.getNodeParameter('operation', 0) as string;
+			
+			// For each input item, make appropriate API request
+			for (let i = 0; i < items.length; i++) {
+				try {
+					let requestOptions;
+					let responseData;
+					
+					// Handle different resources and operations
+					if (resource === 'agent') {
+						if (operation === 'create') {
+							// Create agent API call
+							requestOptions = {
+								method: 'POST' as IHttpRequestMethods,
+								baseURL: 'https://api.bey.dev/v1',
+								url: '/agent',
+								headers: {
+									'Accept': 'application/json',
+									'Content-Type': 'application/json',
+								},
+								body: {
+									avatar_id: this.getNodeParameter('avatarId', i),
+									system_prompt: this.getNodeParameter('systemPrompt', i),
+									name: this.getNodeParameter('name', i),
+									language: this.getNodeParameter('language', i),
+									greeting: this.getNodeParameter('greeting', i),
+									max_session_length_minutes: this.getNodeParameter('maxSessionLengthMinutes', i),
+									capabilities: this.getNodeParameter('capabilities', i),
+								},
+							};
+							
+							// Make API request
+							responseData = await this.helpers.requestWithAuthentication.call(
+								this,
+								'beyondPresenceApi',
+								requestOptions,
+							);
+							
+							// Return raw response with minimal processing
+							returnItems.push({
+								json: responseData,
+								pairedItem: { item: i },
+							});
+						}
+					} else if (resource === 'avatar') {
+						if (operation === 'get') {
+							// Get avatars API call
+							requestOptions = {
+								method: 'GET' as IHttpRequestMethods,
+								baseURL: 'https://api.bey.dev/v1',
+								url: '/avatar',
+								headers: {
+									'Accept': 'application/json',
+									'Content-Type': 'application/json',
+								},
+							};
+							
+							// Make API request
+							responseData = await this.helpers.requestWithAuthentication.call(
+								this,
+								'beyondPresenceApi',
+								requestOptions,
+							);
+							
+							// Return raw API response data
+							returnItems.push({
+								json: responseData,
+								pairedItem: { item: i },
+							});
+						}
+					}
+				} catch (error) {
+					// If there's an error, include it in the output
+					if (this.continueOnFail()) {
+						returnItems.push({
+							json: {
+								error: (error as Error).message,
+							},
+							pairedItem: {
+								item: i,
+							},
+						});
+						continue;
+					}
+					throw error;
+				}
+			}
+			
+			return this.prepareOutputData(returnItems);
 		}
 		
 		// Process webhook data
@@ -45,7 +154,7 @@ export class BeyondPresence implements INodeType {
 							webhookData = webhookDataRaw as BaseWebhookData;
 						}
 					} catch (error) {
-						throw new Error(`Invalid webhook data: ${(error as Error).message}`);
+						throw new ApplicationError(`Invalid webhook data: ${(error as Error).message}`);
 					}
 					
 					// Check if we should process this event based on type
@@ -269,32 +378,6 @@ export class BeyondPresence implements INodeType {
 						value: 'create',
 						action: 'Create a new agent',
 						description: 'Deploy a new agent with configuration',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '/agent',
-								body: {
-									avatar_id: '={{ $parameter.avatarId }}',
-									system_prompt: '={{ $parameter.systemPrompt }}',
-									name: '={{ $parameter.name }}',
-									language: '={{ $parameter.language }}',
-									greeting: '={{ $parameter.greeting }}',
-									max_session_length_minutes: '={{ $parameter.maxSessionLengthMinutes }}',
-									capabilities: '={{ $parameter.capabilities }}',
-								},
-							},
-							output: {
-								postReceive: [
-									{
-										type: 'setKeyValue',
-										properties: {
-											id: '={{ $responseItem.id }}',
-											call_link: '=https://bey.chat/{{ $responseItem.id }}',
-										},
-									},
-								],
-							},
-						},
 					},
 				],
 				default: 'create',
@@ -461,12 +544,6 @@ export class BeyondPresence implements INodeType {
 						value: 'get',
 						action: 'Get the available avatars',
 						description: 'Get the available Avatars',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '/avatar',
-							},
-						},
 					},
 				],
 				default: 'get',
