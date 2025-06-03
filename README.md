@@ -10,6 +10,8 @@ This is an n8n community node for integrating [Beyond Presence](https://docs.bey
 - **Create agent**: Create a video agent and get a ready-to-use call link.
 - **Get available avatars**: Fetch available avatars for use.
 
+More resources and operations coming soon.
+
 ## Installation
 
 Follow the [n8n community node installation guide](https://docs.n8n.io/integrations/community-nodes/installation).
