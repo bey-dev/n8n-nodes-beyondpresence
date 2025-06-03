@@ -202,14 +202,6 @@ export class BeyondPresence implements INodeType {
 		const webhookPayload = request.body;
 		const returnData: INodeExecutionData[] = [];
 		
-		const webhookResponse = {
-			statusCode: 200,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: { message: 'Webhook received successfully' },
-		};
-		
 		try {
 			if (!webhookPayload) {
 				throw new ApplicationError('Missing webhook data');
@@ -240,10 +232,7 @@ export class BeyondPresence implements INodeType {
 			});
 		}
 		
-		return {
-			webhookResponse,
-			workflowData: [returnData],
-		};
+		return { workflowData: [returnData] };
 	}
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
