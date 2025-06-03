@@ -25,5 +25,6 @@ Requires n8n v1.39.1 or higher.
 
 ## Resources
 
+- [Beyond Presence webhook n8n integration](https://docs.bey.dev/webhooks/n8n)
 - [Beyond Presence API docs](https://docs.bey.dev)
 - [n8n community nodes docs](https://docs.n8n.io/integrations)
