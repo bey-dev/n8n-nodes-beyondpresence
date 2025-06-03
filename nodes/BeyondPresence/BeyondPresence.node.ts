@@ -402,7 +402,7 @@ export class BeyondPresence implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Beyond Presence',
 		name: 'beyondPresence',
-		icon: 'file:logo.svg',
+		icon: { light: 'file:logo.svg', dark: 'file:logo.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
