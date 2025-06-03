@@ -6,6 +6,7 @@ This is an n8n community node for integrating [Beyond Presence](https://docs.bey
 
 ## Features
 
+- **Process webhook**: Handle and filter webhook events from Beyond Presence.
 - **Create agent**: Create a video agent and get a ready-to-use call link.
 - **Get available avatars**: Fetch available avatars for use.
 
